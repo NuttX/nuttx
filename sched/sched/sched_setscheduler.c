@@ -111,15 +111,12 @@ int nxsched_set_scheduler(pid_t pid, int policy,
 
   if (pid == 0)
     {
-      tcb = this_task();
-    }
-  else
-    {
-      tcb = nxsched_get_tcb(pid);
+      pid = nxsched_gettid();
     }
 
   /* Verify that the pid corresponds to a real task */
 
+  tcb = nxsched_get_tcb(pid);
   if (!tcb)
     {
       return -ESRCH;
