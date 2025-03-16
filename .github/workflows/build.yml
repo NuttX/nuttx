@@ -20,10 +20,6 @@ on:
   push:
     paths-ignore:
       - 'Documentation/**'
-    branches:
-      - master
-      - 'releases/*'
-    tags:
 
 permissions:
   contents: read
