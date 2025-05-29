@@ -760,6 +760,13 @@ config KXTJ9_I2C_BUS_SPEED
 
 endif # SENSORS_KXTJ9
 
+config SENSORS_L86_M33
+	bool "Quectel L86-M33 GNSS support"
+	default n
+	depends on SERIAL
+	---help---
+		Enable driver support for the L86-M33.
+
 config SENSORS_LIS2DH
 	bool "STMicro LIS2DH device support"
 	default n
