@@ -40,6 +40,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <time.h>
+#include <termios.h>
 
 #include <nuttx/fs/fs.h>
 #include <nuttx/kmalloc.h>
@@ -59,6 +60,36 @@
 
 #ifndef CONFIG_SENSORS_L86_M33_THREAD_STACKSIZE
 #define CONFIG_SENSORS_L86_M33_THREAD_STACKSIZE 10000
+#endif
+
+#ifndef CONFIG_L86_M33_BAUD
+#define CONFIG_L86_M33_BAUD 9600
+#endif
+
+#if CONFIG_L86_M33_BAUD == 4800
+  #define L86_M33_BAUD_RATE 4800
+#elif CONFIG_L86_M33_BAUD == 9600
+    #define L86_M33_BAUD_RATE 9600
+// #elif CONFIG_L86_M33_BAUD == 14400
+//   #define L86_M33_BAUD_RATE 14400
+#elif CONFIG_L86_M33_BAUD == 19200
+  #define L86_M33_BAUD_RATE 19200
+#elif CONFIG_L86_M33_BAUD == 38400
+  #define L86_M33_BAUD_RATE 38400
+#elif CONFIG_L86_M33_BAUD == 57600
+  #define L86_M33_BAUD_RATE 57600
+#elif CONFIG_L86_M33_BAUD == 115200
+  #define L86_M33_BAUD_RATE 115200
+#else
+  #error "Invalid baud rate. Supported baud rates are: 4800, 5600, 14400, 19200, 38400, 57600, 115200"
+#endif
+
+#ifndef CONFIG_L86_M33_FIX_INT
+#define CONFIG_L86_M33_FIX_INT 1000
+#endif 
+
+#ifdef CONFIG_L86_M33_FIX_INT
+#define L86_M33_FIX_INT CONFIG_L86_M33_FIX_INT
 #endif
 
 /* Helper to get array length */
@@ -86,17 +117,87 @@ typedef struct
  * Private Function Prototypes
  ****************************************************************************/
 
+static int l86m33_control(FAR struct sensor_lowerhalf_s *lower,
+                         FAR struct file *filep, int cmd, unsigned long arg);
+static int l86m33_activate(FAR struct sensor_lowerhalf_s *lower,
+                          FAR struct file *filep, bool enable);
+static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
+                                     FAR struct file *filep,
+                                     FAR uint32_t *period_us);
+
 /****************************************************************************
  * Private Data
  ****************************************************************************/
 
 static const struct sensor_ops_s g_sensor_ops =
 {
+  // .control = l86m33_control,
+  // .activate = l86m33_activate,
+  .set_interval = l86m33_set_interval,
 };
 
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
+char calculate_checksum(char* data, int len){
+  char ret = 0;
+  for (int i = 0; i < len; ++i){
+    ret = ret ^ *(data + i);
+  }
+  return ret;
+}
+
+bool send_command(FAR struct file *uart, L86M33_COMMAND cmd, unsigned long arg){
+  
+  switch (cmd)
+  {
+    case L86M33_CHANGE_BAUD:
+    {
+      char buf[50];
+      int bw1 = snprintf(buf, 50, "$PQBAUD,W,%d", L86_M33_BAUD_RATE);
+      // sninfo("%s %d, Setting baud rate to %d\n", buf, bw1, L86_M33_BAUD_RATE);
+      char checksum = calculate_checksum(buf+1, bw1-1);
+      // sninfo("Got checksum: %d\n", checksum);
+      int bw2 = snprintf(buf+bw1, 50-bw1, "*%02x\r\n", checksum);
+      // sninfo("About to send: %s\n", buf);
+      file_write(uart, buf, bw1+bw2);
+    }
+    case L86M33_PQEPE_OUTPUT:
+      break;
+    default:
+      break;
+  }
+}
+
+/****************************************************************************
+ * Name: l86m33_set_interval
+ *
+ * Description:
+ *   Send commands to the l86m33
+ ****************************************************************************/
+static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
+                                     FAR struct file *filep,
+                                     FAR uint32_t *period_us)
+{
+  if (period_us < 100 || period_us > 10000){
+    // Invalid period
+    return -1;
+  }
+  return 0;
+
+}
+
+ /****************************************************************************
+ * Name: l86m33_control
+ *
+ * Description:
+ *   Send commands to the l86m33
+ ****************************************************************************/
+static int l86m33_control(FAR struct sensor_lowerhalf_s *lower,
+                         FAR struct file *filep, int cmd, unsigned long arg)
+{
+  return 0;
+}
 
  /****************************************************************************
  * Name: l86m33_thread
@@ -235,20 +336,21 @@ static int l86m33_thread(int argc, FAR char *argv[]){
  *
  ****************************************************************************/
 
-int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno, SUPPORTED_BAUD_RATES br, SUPPORTED_UPDATE_RATES ur)
+int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno)
 {
   FAR l86m33_dev_s *priv = NULL;
+  struct termios opt;
   int err = 0;
   // int retries = 0;
-
+  
   DEBUGASSERT(uartpath != NULL);
   DEBUGASSERT(devpath != NULL);
-
+  
   /* Initialize device structure */
-
+  
   priv = kmm_zalloc(sizeof(l86m33_dev_s));
   if (priv == NULL)
-    {
+  {
       wlerr("Failed to allocate instance of L86-M33 driver.\n");
       return -ENOMEM;
     }
@@ -276,6 +378,58 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
 
   /* Setup sensor with configured settings */
   
+  #ifdef CONFIG_SERIAL_TERMIOS
+  send_command(&priv->uart, L86M33_CHANGE_BAUD, L86_M33_BAUD_RATE);
+  file_ioctl(&priv->uart, TCGETS, &opt);
+  cfmakeraw(&opt);
+  switch(L86_M33_BAUD_RATE){
+    case 4800:
+    {
+      cfsetispeed(&opt, B4800);
+      cfsetospeed(&opt, B4800);
+      break;
+    }
+    case 9600:
+    {
+      cfsetispeed(&opt, B9600);
+      cfsetospeed(&opt, B9600);
+      break;
+    }
+    // 14400 not supported in termios
+    // case 14400:
+    // {
+    //   cfsetispeed(&opt, B14400);
+    //   cfsetospeed(&opt, B14400);
+    //   break;
+    // }
+    case 19200:
+    {
+      cfsetispeed(&opt, B19200);
+      cfsetospeed(&opt, B19200);
+      break;
+    }
+    case 38400:
+    {
+      cfsetispeed(&opt, B38400);
+      cfsetospeed(&opt, B38400);
+      break;
+    }
+    case 57600:
+    {
+      cfsetispeed(&opt, B57600);
+      cfsetospeed(&opt, B57600);
+      break;
+    }
+    case 115200:
+    {
+      cfsetispeed(&opt, B115200);
+      cfsetospeed(&opt, B115200);
+      break;
+    }
+  }
+  int res = file_ioctl(&priv->uart, TCSETS, &opt);
+  sninfo("Baud rate change: %d\n", res);
+  #endif
 
   /* Register UORB Sensor */
   // TODO: Write sensor functions and properly register sensor
