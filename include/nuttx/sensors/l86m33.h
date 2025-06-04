@@ -51,20 +51,12 @@ typedef enum {
   L86M33_BAUD_38400 = 38400,
   L86M33_BAUD_57600 = 57600,
   L86M33_BAUD_115200 = 115200
-} SUPPORTED_BAUD_RATES;
+} L866M33_SUPPORTED_BAUD_RATES;
 
 typedef enum {
-  L86M33_UPDATE_1HZ = 1,
-  L86M33_UPDATE_2HZ = 2,
-  L86M33_UPDATE_3HZ = 3,
-  L86M33_UPDATE_4HZ = 4,
-  L86M33_UPDATE_5HZ = 5,
-  L86M33_UPDATE_6HZ = 6,
-  L86M33_UPDATE_7HZ = 7,
-  L86M33_UPDATE_8HZ = 8,
-  L86M33_UPDATE_9HZ = 9,
-  L86M33_UPDATE_10HZ = 10,
-} SUPPORTED_UPDATE_RATES;
+  L86M33_CHANGE_BAUD,
+  L86M33_PQEPE_OUTPUT
+} L86M33_COMMAND;
 
 /****************************************************************************
  * Public Functions Prototypes
@@ -86,6 +78,6 @@ typedef enum {
  *
  ****************************************************************************/
 
-int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno, SUPPORTED_BAUD_RATES br, SUPPORTED_UPDATE_RATES ur);
+int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno);
 
 #endif /* __INCLUDE_NUTTX_SENSORS_L86M33_H */

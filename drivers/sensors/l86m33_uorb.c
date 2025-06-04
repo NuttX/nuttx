@@ -110,30 +110,30 @@ static int l86m33_thread(int argc, FAR char *argv[]){
       (FAR l86m33_dev_s *)((uintptr_t)strtoul(argv[1], NULL, 16));
   struct sensor_gnss gps;
   memset(&gps, 0, sizeof(gps));
-
+  
   /* Read full line of NMEA output */
   for(;;){
     int line_len = 0;
     char line[MINMEA_MAX_LENGTH];
     char next_char;
     do
-      {
+    {
         file_read(&dev->uart, &next_char, 1);
         if (next_char != '\r' && next_char != '\n')
-          {
-            line[line_len++] = next_char;
+        {
+          line[line_len++] = next_char;
           }
-      }
-    while (next_char != '\r' && next_char != '\n');
-    line[line_len] = '\0';
-
+        }
+        while (next_char != '\r' && next_char != '\n');
+        line[line_len] = '\0';
+        
     /* Parse line based on NMEA sentence type */
     switch (minmea_sentence_id(line, false))
+    {
+      /* Time data is obtained from RMC sentence */
+      case MINMEA_SENTENCE_RMC:
       {
-          /* Time data is obtained from RMC sentence */
-          case MINMEA_SENTENCE_RMC:
-          {
-              struct minmea_sentence_rmc frame;
+        struct minmea_sentence_rmc frame;
               struct tm tm;
               if (minmea_check(line, false) && minmea_parse_rmc(&frame, line)){
                 gps.timestamp = sensor_get_timestamp();
@@ -141,12 +141,12 @@ static int l86m33_thread(int argc, FAR char *argv[]){
                 gps.time_utc = mktime(&tm);
               }
               break;
-          }
-          /* Velocity data is obtained from VTG sentence*/
+            }
+            /* Velocity data is obtained from VTG sentence*/
           case MINMEA_SENTENCE_VTG:
           {
             struct minmea_sentence_vtg frame;
-
+            
             if (minmea_parse_vtg(&frame, line)){
               gps.ground_speed = minmea_tofloat(&frame.speed_kph) * 3.6; /* Convert speed in kph to mps*/
               gps.course = minmea_tofloat(&frame.true_track_degrees);
@@ -170,7 +170,7 @@ static int l86m33_thread(int argc, FAR char *argv[]){
           case MINMEA_SENTENCE_GSA:
           {
             struct minmea_sentence_gsa frame;
-
+            
             if (minmea_parse_gsa(&frame, line)){
               gps.hdop = minmea_tofloat(&frame.hdop);
               gps.pdop = minmea_tofloat(&frame.pdop);
@@ -190,12 +190,12 @@ static int l86m33_thread(int argc, FAR char *argv[]){
           events will be pushed whenever that sentence is read */
           case MINMEA_SENTENCE_GLL:{
               dev->lower.push_event(dev->lower.priv, &gps, sizeof(gps));
-          }
-          /* All remaining sentences are not transmitted by the module */
-          case MINMEA_SENTENCE_GSV:
-          case MINMEA_SENTENCE_GBS:
-          case MINMEA_SENTENCE_GST:
-          case MINMEA_SENTENCE_ZDA:
+            }
+            /* All remaining sentences are not transmitted by the module */
+            case MINMEA_SENTENCE_GSV:
+            case MINMEA_SENTENCE_GBS:
+            case MINMEA_SENTENCE_GST:
+            case MINMEA_SENTENCE_ZDA:
           {
             break;
           }
@@ -209,7 +209,7 @@ static int l86m33_thread(int argc, FAR char *argv[]){
             wlerr("Unknown NMEA sentence read, skipping line...\n");
             break;
           }
-      }
+        }
   }
   
   return 0;
@@ -302,11 +302,11 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
 
   if (err < 0)
     {
-      snerr("Failed to create the nau7802 notification kthread\n");
+      snerr("Failed to create the l86m33 notification kthread\n");
       goto sensor_unreg;
     }
 
-    sninfo("Registered L86-M33 driver with kernel polling thread with baud rate %d and update rate %d", br, ur);
+    sninfo("Registered L86-M33 driver with kernel polling thread with baud rate %d and update rate %d", L86_M33_BAUD_RATE, L86_M33_FIX_INT);
     
   /* Cleanup items on error */
   
