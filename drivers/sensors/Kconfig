@@ -767,6 +767,20 @@ config SENSORS_L86_M33
 	---help---
 		Enable driver support for the L86-M33.
 
+config L86_M33_BAUD
+	int "Quectel L86-M33 baud rate"
+	default 9600
+	depends on SENSORS_L86_M33 && SERIAL_TERMIOS
+	range 4800 115200
+	---help---
+		Supported values are: 4800, 9600, 14400, 19200, 38400, 57600 and 115200
+
+config L86_M33_FIX_INT
+	int "Quectel L86-M33 fix interval"
+	default 1000
+	depends on SENSORS_L86_M33 && SERIAL_TERMIOS
+	range 100 10000
+	
 config SENSORS_LIS2DH
 	bool "STMicro LIS2DH device support"
 	default n
