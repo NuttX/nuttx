@@ -55,7 +55,9 @@ typedef enum {
 
 typedef enum {
   L86M33_CHANGE_BAUD,
-  L86M33_PQEPE_OUTPUT
+  L86M33_PQEPE_OUTPUT,
+  L86M33_QUERY,
+  L86M33_CHANGE_FIX_INT,
 } L86M33_COMMAND;
 
 /****************************************************************************
