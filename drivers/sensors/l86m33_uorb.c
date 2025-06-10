@@ -148,25 +148,48 @@ char calculate_checksum(char* data, int len){
 }
 
 bool send_command(FAR struct file *uart, L86M33_COMMAND cmd, unsigned long arg){
-  
+  char buf[50];
+  int bw1;
   switch (cmd)
   {
     case L86M33_CHANGE_BAUD:
     {
-      char buf[50];
-      int bw1 = snprintf(buf, 50, "$PQBAUD,W,%d", L86_M33_BAUD_RATE);
-      // sninfo("%s %d, Setting baud rate to %d\n", buf, bw1, L86_M33_BAUD_RATE);
-      char checksum = calculate_checksum(buf+1, bw1-1);
-      // sninfo("Got checksum: %d\n", checksum);
-      int bw2 = snprintf(buf+bw1, 50-bw1, "*%02x\r\n", checksum);
-      // sninfo("About to send: %s\n", buf);
-      file_write(uart, buf, bw1+bw2);
+      bw1 = snprintf(buf, 50, "$PMTK251,%d", L86_M33_BAUD_RATE);
     }
     case L86M33_PQEPE_OUTPUT:
       break;
+    case L86M33_QUERY:
+    {
+      break;
+    }
+    case L86M33_CHANGE_FIX_INT: {
+      bw1 = snprintf(buf, 50, "$PMTK220,%d", L86_M33_FIX_INT);
+    }
     default:
       break;
   }
+  char checksum = calculate_checksum(buf+1, bw1-1);
+  int bw2 = snprintf(buf+bw1, 50-bw1, "*%02X\r\n", checksum);
+  sninfo("About to send: %s size: %d\n", buf, bw1+bw2);
+  int bw3 = file_write(uart, buf, bw1+bw2);
+  sninfo("Bytes written: %d\n", bw3);
+  return bw3;
+}
+
+char* read_line(FAR struct file *uart){
+  int line_len = 0;
+  char line[MINMEA_MAX_LENGTH];
+  char next_char;
+  do
+  {
+    file_read(uart, &next_char, 1);
+    if (next_char != '\r' && next_char != '\n')
+    {
+      line[line_len++] = next_char;
+    }
+  } while (next_char != '\r' && next_char != '\n');
+  line[line_len] = '\0';
+  return line;
 }
 
 /****************************************************************************
