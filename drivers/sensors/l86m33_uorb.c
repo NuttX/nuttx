@@ -324,12 +324,12 @@ static int l86m33_thread(int argc, FAR char *argv[]){
           }
           case MINMEA_INVALID:
           {
-            snerr("Invalid NMEA sentence read %s, skipping line...\n", line);
+            // snerr("Invalid NMEA sentence read %s, skipping line...\n", line);
             break;
           }
           case MINMEA_UNKNOWN:
           {
-            snerr("Unknown NMEA sentence read %s, skipping line...\n", line);
+            // snerr("Unknown NMEA sentence read %s, skipping line...\n", line);
             break;
           }
         }
@@ -399,66 +399,61 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
     }
 
   /* Setup sensor with configured settings */
+
+  read_line(&priv->uart); // Wait until module is powered on
   
   #ifdef CONFIG_SERIAL_TERMIOS
-  // send_command(&priv->uart, L86M33_CHANGE_BAUD, L86_M33_BAUD_RATE);
-  // file_ioctl(&priv->uart, TCGETS, &opt);
-  // cfmakeraw(&opt);
-  // switch(L86_M33_BAUD_RATE){
-  //   case 4800:
-  //   {
-      // cfsetispeed(&opt, B4800);
-  //     cfsetospeed(&opt, B4800);
-  //     break;
-  //   }
-  //   case 9600:
-  //   {
-  //     cfsetispeed(&opt, B9600);
-  //     cfsetospeed(&opt, B9600);
-  //     break;
-  //   }
-  //   // 14400 not supported in termios
-  //   // case 14400:
-  //   // {
-  //   //   cfsetispeed(&opt, B14400);
-  //   //   cfsetospeed(&opt, B14400);
-  //   //   break;
-  //   // }
-  //   case 19200:
-  //   {
-  //     cfsetispeed(&opt, B19200);
-  //     cfsetospeed(&opt, B19200);
-  //     break;
-  //   }
-  //   case 38400:
-  //   {
-  //     cfsetispeed(&opt, B38400);
-  //     cfsetospeed(&opt, B38400);
-  //     break;
-  //   }
-  //   case 57600:
-  //   {
-  //     cfsetispeed(&opt, B57600);
-  //     cfsetospeed(&opt, B57600);
-  //     break;
-  //   }
-  //   case 115200:
-  //   {
-  //     cfsetispeed(&opt, B115200);
-  //     cfsetospeed(&opt, B115200);
-  //     break;
-  //   }
-  // }
-  // int res = file_ioctl(&priv->uart, TCSETS, &opt);
-  // sninfo("Baud rate change: %d\n", res);
-  // nxsig_usleep(20000);
-  // int bytes_in_buf;
-  // char line[MINMEA_MAX_LENGTH];
-  // res = file_ioctl(&priv->uart, FIONREAD, &bytes_in_buf);
-  // sninfo("Bytes in buf: %d, %d\n", bytes_in_buf, res);
-  // file_read(&priv->uart, line, bytes_in_buf);
-  // line[bytes_in_buf+1] = '\0';
-  // sninfo("Command response: %s\n", line);
+  send_command(&priv->uart, L86M33_CHANGE_BAUD, L86_M33_BAUD_RATE);
+  nxsig_usleep(20000);
+  file_ioctl(&priv->uart, TCGETS, &opt);
+  cfmakeraw(&opt);
+  switch(L86_M33_BAUD_RATE){
+    case 4800:
+    {
+      cfsetispeed(&opt, 4800);
+      cfsetospeed(&opt, 4800);
+      break;
+    }
+    case 9600:
+    {
+      cfsetispeed(&opt, 9600);
+      cfsetospeed(&opt, 9600);
+      break;
+    }
+    case 14400:
+    {
+      cfsetispeed(&opt, 14400);
+      cfsetospeed(&opt, 14400);
+      break;
+    }
+    case 19200:
+    {
+      cfsetispeed(&opt, 19200);
+      cfsetospeed(&opt, 19200);
+      break;
+    }
+    case 38400:
+    {
+      cfsetispeed(&opt, 38400);
+      cfsetospeed(&opt, 38400);
+      break;
+    }
+    case 57600:
+    {
+      cfsetispeed(&opt, 57600);
+      cfsetospeed(&opt, 57600);
+      break;
+    }
+    case 115200:
+    {
+      cfsetispeed(&opt, 115200);
+      cfsetospeed(&opt, 115200);
+      break;
+    }
+  }
+  int res = file_ioctl(&priv->uart, TCSETS, &opt);
+  nxsig_usleep(20000);
+  send_command(&priv->uart, L86M33_CHANGE_FIX_INT, L86_M33_FIX_INT);
   #endif
 
   /* Register UORB Sensor */
