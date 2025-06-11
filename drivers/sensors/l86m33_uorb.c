@@ -139,7 +139,20 @@ static const struct sensor_ops_s g_sensor_ops =
 /****************************************************************************
  * Private Functions
  ****************************************************************************/
-char calculate_checksum(char* data, int len){
+/****************************************************************************
+ * Name: calculate_checksum
+ *
+ * Description:
+ *   Calculate checksum of PMTK command.
+ *
+ * Arguments:
+ *    data      -  Char pointer to calculate checksum for
+ *    len       -  Length of char string
+ * 
+ * Returns:
+ *  1-byte checksum value to be interpreted as a hex byte
+ ****************************************************************************/
+ char calculate_checksum(char* data, int len){
   char ret = 0;
   for (int i = 0; i < len; ++i){
     ret = ret ^ *(data + i);
@@ -147,6 +160,18 @@ char calculate_checksum(char* data, int len){
   return ret;
 }
 
+/****************************************************************************
+ * Name: send_command
+ *
+ * Description:
+ *   Sends command L86-M33 GNSS device.
+ *
+ * Arguments:
+ *    uart      -  Pointer to file struct of L86-M33 device
+ *    cmd       -  L86M33_COMMAND enum
+ *    arg       -  Dependent on command type. Could be used for preset
+ *                 enum, numeric args or struct pointers
+ ****************************************************************************/
 bool send_command(FAR struct file *uart, L86M33_COMMAND cmd, unsigned long arg){
   char buf[50];
   int bw1;
@@ -155,6 +180,7 @@ bool send_command(FAR struct file *uart, L86M33_COMMAND cmd, unsigned long arg){
     case L86M33_CHANGE_BAUD:
     {
       bw1 = snprintf(buf, 50, "$PMTK251,%d", L86_M33_BAUD_RATE);
+      break;
     }
     case L86M33_PQEPE_OUTPUT:
       break;
@@ -164,6 +190,7 @@ bool send_command(FAR struct file *uart, L86M33_COMMAND cmd, unsigned long arg){
     }
     case L86M33_CHANGE_FIX_INT: {
       bw1 = snprintf(buf, 50, "$PMTK220,%d", L86_M33_FIX_INT);
+      break;
     }
     default:
       break;
@@ -452,7 +479,10 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
     }
   }
   int res = file_ioctl(&priv->uart, TCSETS, &opt);
-  nxsig_usleep(20000);
+  // Wait for module to update
+  for (int i = 0; i < 5; ++i){
+    read_line(&priv->uart);
+  }
   send_command(&priv->uart, L86M33_CHANGE_FIX_INT, L86_M33_FIX_INT);
   #endif
 
