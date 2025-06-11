@@ -172,24 +172,32 @@ static const struct sensor_ops_s g_sensor_ops =
  *    arg       -  Dependent on command type. Could be used for preset
  *                 enum, numeric args or struct pointers
  ****************************************************************************/
-bool send_command(FAR struct file *uart, L86M33_COMMAND cmd, unsigned long arg){
+bool send_command(FAR struct file *uart, L86M33_PMTK_COMMAND cmd, unsigned long arg){
   char buf[50];
   int bw1;
   switch (cmd)
   {
-    case L86M33_CHANGE_BAUD:
+    case CMD_HOT_START:
+    case CMD_WARM_START:
+    case CMD_COLD_START:
+    case CMD_FULL_COLD_START:
     {
-      bw1 = snprintf(buf, 50, "$PMTK251,%d", L86_M33_BAUD_RATE);
+      bw1 = snprintf(buf, 50, "$PMTK%d", cmd);
       break;
     }
-    case L86M33_PQEPE_OUTPUT:
-      break;
-    case L86M33_QUERY:
+    case CMD_STANDBY_MODE:
     {
+      bw1 = snprintf(buf, 50, "$PMTK%d,%d", cmd, (int)arg);
       break;
     }
-    case L86M33_CHANGE_FIX_INT: {
-      bw1 = snprintf(buf, 50, "$PMTK220,%d", L86_M33_FIX_INT);
+    case SET_NMEA_BAUDRATE:
+    {
+      bw1 = snprintf(buf, 50, "$PMTK%d,%d", cmd, (int)arg);
+      break;
+    }
+    case SET_POS_FIX: 
+    {
+      bw1 = snprintf(buf, 50, "$PMTK%d,%d", cmd, (int)arg);
       break;
     }
     default:
@@ -284,82 +292,86 @@ static int l86m33_thread(int argc, FAR char *argv[]){
       case MINMEA_SENTENCE_RMC:
       {
         struct minmea_sentence_rmc frame;
-              struct tm tm;
-              if (minmea_check(line, false) && minmea_parse_rmc(&frame, line)){
-                gps.timestamp = sensor_get_timestamp();
-                minmea_getdatetime(&tm, &frame.date, &frame.time);
-                gps.time_utc = mktime(&tm);
-              }
-              break;
-            }
-            /* Velocity data is obtained from VTG sentence*/
-          case MINMEA_SENTENCE_VTG:
-          {
-            struct minmea_sentence_vtg frame;
-            
-            if (minmea_parse_vtg(&frame, line)){
-              gps.ground_speed = minmea_tofloat(&frame.speed_kph) * 3.6; /* Convert speed in kph to mps*/
-              gps.course = minmea_tofloat(&frame.true_track_degrees);
-            }
-            break;
-          }
-          /* 3D positional data is obtained from GGA sentence */
-          case MINMEA_SENTENCE_GGA:
-          {
-            struct minmea_sentence_gga frame;
-            
-            if (minmea_parse_gga(&frame, line)){
-              gps.latitude = minmea_tocoord(&frame.latitude); 
-              gps.longitude = minmea_tocoord(&frame.longitude);
-              gps.altitude = minmea_tofloat(&frame.altitude);
-              gps.altitude_ellipsoid = minmea_tofloat(&frame.height);
-            }
-            break;
-          }
-          /* Precision dilution and sattelite data is obtained from GSA sentence */
-          case MINMEA_SENTENCE_GSA:
-          {
-            struct minmea_sentence_gsa frame;
-            
-            if (minmea_parse_gsa(&frame, line)){
-              gps.hdop = minmea_tofloat(&frame.hdop);
-              gps.pdop = minmea_tofloat(&frame.pdop);
-              gps.vdop = minmea_tofloat(&frame.vdop);
-              uint32_t sats = 0;
-              for (int i = 0; i < 12; ++i){
-                if (frame.sats[i] != 0){
-                  ++sats;
-                }
-              }
-              gps.satellites_used = sats;
-            }
-            break;
-          }
-          /* GSV and GLL data are transmitted by the l86-m33 but do not provide
-          additional information. Since GLL is always the last message transmitted,
-          events will be pushed whenever that sentence is read */
-          case MINMEA_SENTENCE_GLL:{
-              dev->lower.push_event(dev->lower.priv, &gps, sizeof(gps));
-            }
-            /* All remaining sentences are not transmitted by the module */
-            case MINMEA_SENTENCE_GSV:
-            case MINMEA_SENTENCE_GBS:
-            case MINMEA_SENTENCE_GST:
-            case MINMEA_SENTENCE_ZDA:
-          {
-            break;
-          }
-          case MINMEA_INVALID:
-          {
-            // snerr("Invalid NMEA sentence read %s, skipping line...\n", line);
-            break;
-          }
-          case MINMEA_UNKNOWN:
-          {
-            // snerr("Unknown NMEA sentence read %s, skipping line...\n", line);
-            break;
-          }
+        struct tm tm;
+        if (minmea_check(line, false) && minmea_parse_rmc(&frame, line)){
+          gps.timestamp = sensor_get_timestamp();
+          minmea_getdatetime(&tm, &frame.date, &frame.time);
+          gps.time_utc = mktime(&tm);
         }
+        break;
+      }
+
+      /* Velocity data is obtained from VTG sentence*/
+      case MINMEA_SENTENCE_VTG:
+      {
+        struct minmea_sentence_vtg frame;
+        
+        if (minmea_parse_vtg(&frame, line)){
+          gps.ground_speed = minmea_tofloat(&frame.speed_kph) * 3.6; /* Convert speed in kph to mps*/
+          gps.course = minmea_tofloat(&frame.true_track_degrees);
+        }
+        break;
+      }
+
+      /* 3D positional data is obtained from GGA sentence */
+      case MINMEA_SENTENCE_GGA:
+      {
+        struct minmea_sentence_gga frame;
+        
+        if (minmea_parse_gga(&frame, line)){
+          gps.latitude = minmea_tocoord(&frame.latitude); 
+          gps.longitude = minmea_tocoord(&frame.longitude);
+          gps.altitude = minmea_tofloat(&frame.altitude);
+          gps.altitude_ellipsoid = minmea_tofloat(&frame.height);
+        }
+        break;
+      }
+
+      /* Precision dilution and sattelite data is obtained from GSA sentence */
+      case MINMEA_SENTENCE_GSA:
+      {
+        struct minmea_sentence_gsa frame;
+        
+        if (minmea_parse_gsa(&frame, line)){
+          gps.hdop = minmea_tofloat(&frame.hdop);
+          gps.pdop = minmea_tofloat(&frame.pdop);
+          gps.vdop = minmea_tofloat(&frame.vdop);
+          uint32_t sats = 0;
+          for (int i = 0; i < 12; ++i){
+            if (frame.sats[i] != 0){
+              ++sats;
+            }
+          }
+          gps.satellites_used = sats;
+        }
+        break;
+      }
+      /* GSV and GLL data are transmitted by the l86-m33 but do not provide
+      additional information. Since GLL is always the last message transmitted,
+      events will be pushed whenever that sentence is read */
+      case MINMEA_SENTENCE_GLL:
+      {
+          dev->lower.push_event(dev->lower.priv, &gps, sizeof(gps));
+      }
+      /* All remaining sentences are not transmitted by the module */
+      case MINMEA_SENTENCE_GSV:
+      case MINMEA_SENTENCE_GBS:
+      case MINMEA_SENTENCE_GST:
+      case MINMEA_SENTENCE_ZDA:
+      {
+        break;
+      }
+      case MINMEA_INVALID:
+      {
+        // snerr("Invalid NMEA sentence read %s, skipping line...\n", line);
+        break;
+      }
+      case MINMEA_UNKNOWN:
+      {
+        // snerr("Unknown NMEA sentence read %s, skipping line...\n", line);
+        break;
+      }
+    }
   }
   
   return 0;
@@ -428,9 +440,9 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   /* Setup sensor with configured settings */
 
   read_line(&priv->uart); // Wait until module is powered on
-  
+
   #ifdef CONFIG_SERIAL_TERMIOS
-  send_command(&priv->uart, L86M33_CHANGE_BAUD, L86_M33_BAUD_RATE);
+  send_command(&priv->uart, SET_NMEA_BAUDRATE, L86_M33_BAUD_RATE);
   nxsig_usleep(20000);
   file_ioctl(&priv->uart, TCGETS, &opt);
   cfmakeraw(&opt);
@@ -483,7 +495,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   for (int i = 0; i < 5; ++i){
     read_line(&priv->uart);
   }
-  send_command(&priv->uart, L86M33_CHANGE_FIX_INT, L86_M33_FIX_INT);
+  send_command(&priv->uart, SET_POS_FIX, L86_M33_FIX_INT);
   #endif
 
   /* Register UORB Sensor */

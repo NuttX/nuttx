@@ -54,11 +54,15 @@ typedef enum {
 } L866M33_SUPPORTED_BAUD_RATES;
 
 typedef enum {
-  L86M33_CHANGE_BAUD,
-  L86M33_PQEPE_OUTPUT,
-  L86M33_QUERY,
-  L86M33_CHANGE_FIX_INT,
-} L86M33_COMMAND;
+  CMD_HOT_START = 101,
+  CMD_WARM_START = 102,
+  CMD_COLD_START = 103,
+  CMD_FULL_COLD_START = 104,
+  CMD_STANDBY_MODE = 161,
+  SET_POS_FIX = 220,
+  SET_NMEA_BAUDRATE = 251,
+  FR_MODE = 886,
+} L86M33_PMTK_COMMAND;
 
 /****************************************************************************
  * Public Functions Prototypes
