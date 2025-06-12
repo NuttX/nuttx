@@ -102,11 +102,12 @@
 
 typedef struct
 {
-  FAR struct file uart;            /* UART interface */
-  struct sensor_lowerhalf_s lower; /* UORB lower-half */
-  mutex_t devlock;                 /* Exclusive access */
-  sem_t run;                       /* Start/stop collection thread */
-  bool enabled;                    /* If module has started*/
+  FAR struct file uart;               /* UART interface */
+  struct sensor_lowerhalf_s lower;    /* UORB lower-half */
+  mutex_t devlock;                    /* Exclusive access */
+  sem_t run;                          /* Start/stop collection thread */
+  bool enabled;                       /* If module has started */
+  char buffer[MINMEA_MAX_LENGTH]; /* Buffer for UART interface */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   int16_t crefs; /* Number of open references */
 #endif
@@ -130,7 +131,7 @@ static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
 
 static const struct sensor_ops_s g_sensor_ops =
 {
-  // .control = l86m33_control,
+  .control = l86m33_control,
   .activate = l86m33_activate,
   .set_interval = l86m33_set_interval,
 };
@@ -207,13 +208,15 @@ bool send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg)
   int bw2 = snprintf(buf+bw1, 50-bw1, "*%02X\r\n", checksum);
   sninfo("About to send: %s size: %d\n", buf, bw1+bw2);
   int bw3 = file_write(&dev->uart, buf, bw1+bw2);
-  sninfo("Bytes written: %d\n", bw3);
-  nxmutex_unlock(&dev->devlock);
   // TODO: Check for ACK based on command sent
+
+
+  nxmutex_unlock(&dev->devlock);
   return bw3;
 }
 
-void read_line(FAR struct file *uart){
+void read_line(l86m33_dev_s *dev){
+  memset(dev->buffer, '\0', MINMEA_MAX_LENGTH);
   int line_len = 0;
   char next_char;
   do
@@ -477,7 +480,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
 
   /* Setup sensor with configured settings */
 
-  read_line(&priv->uart); // Wait until module is powered on
+  read_line(priv); // Wait until module is powered on
 
   #ifdef CONFIG_SERIAL_TERMIOS
   send_command(priv, SET_NMEA_BAUDRATE, L86_M33_BAUD_RATE);
