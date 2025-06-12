@@ -215,17 +215,28 @@ bool send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg)
 
 void read_line(FAR struct file *uart){
   int line_len = 0;
-  char line[MINMEA_MAX_LENGTH];
   char next_char;
   do
   {
-    file_read(uart, &next_char, 1);
+    file_read(&dev->uart, &next_char, 1);
     if (next_char != '\r' && next_char != '\n')
     {
-      line[line_len++] = next_char;
+      dev->buffer[line_len++] = next_char;
     }
-  } while (next_char != '\r' && next_char != '\n');
-  line[line_len] = '\0';
+  } while (next_char != '\r' && next_char != '\n' && line_len < MINMEA_MAX_LENGTH);
+  dev->buffer[line_len] = '\0';
+}
+
+ /****************************************************************************
+ * Name: l86m33_control
+ *
+ * Description:
+ *   Send commands to the l86m33
+ ****************************************************************************/
+static int l86m33_control(FAR struct sensor_lowerhalf_s *lower,
+                         FAR struct file *filep, int cmd, unsigned long arg)
+{
+  return 0;
 }
 
 /****************************************************************************
@@ -275,18 +286,6 @@ static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
 }
 
  /****************************************************************************
- * Name: l86m33_control
- *
- * Description:
- *   Send commands to the l86m33
- ****************************************************************************/
-static int l86m33_control(FAR struct sensor_lowerhalf_s *lower,
-                         FAR struct file *filep, int cmd, unsigned long arg)
-{
-  return 0;
-}
-
- /****************************************************************************
  * Name: l86m33_thread
  *
  * Description:
@@ -315,28 +314,17 @@ static int l86m33_thread(int argc, FAR char *argv[]){
 
     // Mutex required because some commands send ACKS
     nxmutex_lock(&dev->devlock);
-    int line_len = 0;
-    char line[MINMEA_MAX_LENGTH];
-    char next_char;
-    do
-    {
-      file_read(&dev->uart, &next_char, 1);
-      if (next_char != '\r' && next_char != '\n')
-      {
-        line[line_len++] = next_char;
-      }
-    } while (next_char != '\r' && next_char != '\n');
-    line[line_len] = '\0';
+    read_line(dev);
         
     /* Parse line based on NMEA sentence type */
-    switch (minmea_sentence_id(line, false))
+    switch (minmea_sentence_id(dev->buffer, false))
     {
       /* Time data is obtained from RMC sentence */
       case MINMEA_SENTENCE_RMC:
       {
         struct minmea_sentence_rmc frame;
         struct tm tm;
-        if (minmea_check(line, false) && minmea_parse_rmc(&frame, line)){
+        if (minmea_check(dev->buffer, false) && minmea_parse_rmc(&frame, dev->buffer)){
           gps.timestamp = sensor_get_timestamp();
           minmea_getdatetime(&tm, &frame.date, &frame.time);
           gps.time_utc = mktime(&tm);
@@ -349,7 +337,7 @@ static int l86m33_thread(int argc, FAR char *argv[]){
       {
         struct minmea_sentence_vtg frame;
         
-        if (minmea_parse_vtg(&frame, line)){
+        if (minmea_parse_vtg(&frame, dev->buffer)){
           gps.ground_speed = minmea_tofloat(&frame.speed_kph) * 3.6; /* Convert speed in kph to mps*/
           gps.course = minmea_tofloat(&frame.true_track_degrees);
         }
@@ -361,7 +349,7 @@ static int l86m33_thread(int argc, FAR char *argv[]){
       {
         struct minmea_sentence_gga frame;
         
-        if (minmea_parse_gga(&frame, line)){
+        if (minmea_parse_gga(&frame, dev->buffer)){
           gps.latitude = minmea_tocoord(&frame.latitude); 
           gps.longitude = minmea_tocoord(&frame.longitude);
           gps.altitude = minmea_tofloat(&frame.altitude);
@@ -375,7 +363,7 @@ static int l86m33_thread(int argc, FAR char *argv[]){
       {
         struct minmea_sentence_gsa frame;
         
-        if (minmea_parse_gsa(&frame, line)){
+        if (minmea_parse_gsa(&frame, dev->buffer)){
           gps.hdop = minmea_tofloat(&frame.hdop);
           gps.pdop = minmea_tofloat(&frame.pdop);
           gps.vdop = minmea_tofloat(&frame.vdop);
@@ -543,7 +531,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   int res = file_ioctl(&priv->uart, TCSETS, &opt);
   // Wait for module to update
   for (int i = 0; i < 5; ++i){
-    read_line(&priv->uart);
+    read_line(priv);
   }
   send_command(priv, SET_POS_FIX, L86_M33_FIX_INT);
   #endif
