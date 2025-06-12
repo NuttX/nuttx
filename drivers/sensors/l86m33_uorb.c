@@ -231,18 +231,20 @@ char* read_line(FAR struct file *uart){
  * Name: l86m33_set_interval
  *
  * Description:
- *   Send commands to the l86m33
+ *   Set position fix interval of L86-M33 GNSS module
  ****************************************************************************/
 static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
                                      FAR struct file *filep,
                                      FAR uint32_t *period_us)
 {
-  if (period_us < 100 || period_us > 10000){
+  FAR l86m33_dev_s *dev = container_of(lower, FAR l86m33_dev_s, lower);
+  int fix_interval = *period_us;
+  if (fix_interval < 100 || fix_interval > 10000){
     // Invalid period
     return -1;
   }
+  send_command(dev, SET_POS_FIX, fix_interval);
   return 0;
-
 }
 
  /****************************************************************************
