@@ -85,10 +85,6 @@
   #error "Invalid baud rate. Supported baud rates are: 4800, 5600, 14400, 19200, 38400, 57600, 115200"
 #endif
 
-#ifndef CONFIG_L86_M33_FIX_INT
-#define CONFIG_L86_M33_FIX_INT 1000
-#endif 
-
 #ifdef CONFIG_L86_M33_FIX_INT
 #define L86_M33_FIX_INT CONFIG_L86_M33_FIX_INT
 #endif
@@ -230,7 +226,6 @@ void read_line(FAR struct file *uart){
     }
   } while (next_char != '\r' && next_char != '\n');
   line[line_len] = '\0';
-  return line;
 }
 
 /****************************************************************************
@@ -241,7 +236,20 @@ static int l86m33_activate(FAR struct sensor_lowerhalf_s *lower,
                             FAR struct file *filep, bool enable)
 {
   FAR l86m33_dev_s *dev = container_of(lower, FAR l86m33_dev_s, lower);
-  send_command(dev, CMD_STANDBY_MODE, 0);
+  
+  /* If not already enabled, start gps*/
+  if (enable && !dev->enabled)
+  {
+    nxsem_post(&dev->run);
+    dev->enabled = true;
+    send_command(dev, CMD_HOT_START, (int)NULL);
+  } 
+  /* If not already disabled, send gps into standby mode*/
+  else if (!enable && dev->enabled) 
+  {
+    dev->enabled = false;
+    send_command(dev, CMD_STANDBY_MODE, 0);
+  }
   return 0;
 }
 
@@ -295,14 +303,14 @@ static int l86m33_thread(int argc, FAR char *argv[]){
   
   /* Read full line of NMEA output */
   for(;;){
-    /* If the sensor is disabled we wait indefinitely */
+    /* If the sensor is disabled wait until enabled with activate function */
     if (!dev->enabled)
     {
       err = nxsem_wait(&dev->run);
       if (err < 0)
-        {
-          continue;
-        }
+      {
+        continue;
+      }
     }
 
     // Mutex required because some commands send ACKS
@@ -552,7 +560,6 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
     goto close_file;
   }
 
-  
   FAR char *argv[2];
   char arg1[32];
   snprintf(arg1, 16, "%p", priv);
