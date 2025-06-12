@@ -124,6 +124,9 @@ static int l86m33_activate(FAR struct sensor_lowerhalf_s *lower,
 static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
                                      FAR struct file *filep,
                                      FAR uint32_t *period_us);
+char calculate_checksum(char* data, int len);
+int send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg);
+void read_line(l86m33_dev_s *dev);
 
 /****************************************************************************
  * Private Data
@@ -164,15 +167,24 @@ static const struct sensor_ops_s g_sensor_ops =
  * Name: send_command
  *
  * Description:
- *   Sends command L86-M33 GNSS device.
+ *   Sends command L86-M33 GNSS device and waits for acknowledgement 
+ *   if command supports it.
  *
  * Arguments:
  *    dev       -  Pointer L86-M33 priv struct
  *    cmd       -  L86M33_COMMAND enum
  *    arg       -  Dependent on command type. Could be used for preset
  *                 enum, numeric args or struct pointers
+ * 
+ * Returns:
+ *  Flag defined by device
+ *  negative number - Command failed during writing
+ *  0 - Invalid packet
+ *  1 - Unsupported packet type
+ *  2 - Valid packet, but action failed
+ *  3 - Valid packet, action succeeded 
  ****************************************************************************/
-bool send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg){
+int send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg){
   char buf[50];
   int bw1;
   nxmutex_lock(&dev->devlock);
@@ -204,15 +216,37 @@ bool send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg)
     default:
       break;
   }
+  
   char checksum = calculate_checksum(buf+1, bw1-1);
   int bw2 = snprintf(buf+bw1, 50-bw1, "*%02X\r\n", checksum);
   sninfo("About to send: %s size: %d\n", buf, bw1+bw2);
-  int bw3 = file_write(&dev->uart, buf, bw1+bw2);
-  // TODO: Check for ACK based on command sent
+  int err = file_write(&dev->uart, buf, bw1+bw2);
+  if (err < 0)
+  {
+    snerr("Could not send command to device\n");
+    return err;
+  }
 
+  // These commands do not send ACKs so just return after they've been written
+  if (cmd == CMD_HOT_START || cmd == CMD_WARM_START || cmd == CMD_COLD_START ||
+      cmd == CMD_FULL_COLD_START || cmd == SET_NMEA_BAUDRATE)
+  {
+        
+    nxmutex_unlock(&dev->devlock);
+    return 3;
+  }
 
+  // Some commands will send ACKs, wait for them here before unlocking the mutex
+  memset(buf, '\0', 50);
+  snprintf(buf, 50, "$PMTK001,%d", cmd); // ACK message will be $PMTK001,<cmd num>,<flag>
+  sninfo("Checking for %s\n", buf);
+  for(;;)
+  {
+    read_line(dev);
+    if (strncmp(buf, dev->buffer, strlen(buf)) == 0) break;
+  }
   nxmutex_unlock(&dev->devlock);
-  return bw3;
+  return dev->buffer[13] - '0';
 }
 
 void read_line(l86m33_dev_s *dev){
@@ -433,7 +467,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
 {
   FAR l86m33_dev_s *priv = NULL;
   struct termios opt;
-  int err = 0;
+  int err;
   // int retries = 0;
   
   DEBUGASSERT(devpath != NULL);
@@ -444,7 +478,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   priv = kmm_zalloc(sizeof(l86m33_dev_s));
   if (priv == NULL)
   {
-      wlerr("Failed to allocate instance of L86-M33 driver.\n");
+      snerr("Failed to allocate instance of L86-M33 driver.\n");
       return -ENOMEM;
     }
 
@@ -455,7 +489,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   err = nxmutex_init(&priv->devlock);
   if (err < 0)
     {
-      wlerr("Failed to initialize mutex for L86-M33 device: %d\n", err);
+      snerr("Failed to initialize mutex for L86-M33 device: %d\n", err);
       goto free_mem;
     }
 
@@ -483,7 +517,12 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   read_line(priv); // Wait until module is powered on
 
   #ifdef CONFIG_SERIAL_TERMIOS
-  send_command(priv, SET_NMEA_BAUDRATE, L86_M33_BAUD_RATE);
+  err = send_command(priv, SET_NMEA_BAUDRATE, L86_M33_BAUD_RATE);
+  if (err != 3)
+  {
+    snwarn("Couldn't set baud rate of device: %d\n", err);
+  }
+  
   nxsig_usleep(20000);
   file_ioctl(&priv->uart, TCGETS, &opt);
   cfmakeraw(&opt);
@@ -531,12 +570,20 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
       break;
     }
   }
-  int res = file_ioctl(&priv->uart, TCSETS, &opt);
+  err = file_ioctl(&priv->uart, TCSETS, &opt);
+  if (err < 0)
+    {
+      snwarn("Couldn't change baud rate of U(S)ART interface: %d\n", err); 
+    }
   // Wait for module to update
   for (int i = 0; i < 5; ++i){
     read_line(priv);
   }
-  send_command(priv, SET_POS_FIX, L86_M33_FIX_INT);
+  err = send_command(priv, SET_POS_FIX, L86_M33_FIX_INT);
+  if (err != 3)
+    {
+      snwarn("Couldn't set position fix interval, %d\n", err);
+    }
   #endif
 
   /* Register UORB Sensor */
@@ -546,10 +593,10 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
 
   err = sensor_register(&priv->lower, devno);
   if (err < 0)
-  {
-    snerr("Failed to register L86-M33 driver: %d\n", err);
-    goto close_file;
-  }
+    {
+      snerr("Failed to register L86-M33 driver: %d\n", err);
+      goto close_file;
+    }
 
   FAR char *argv[2];
   char arg1[32];
