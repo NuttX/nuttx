@@ -28,6 +28,7 @@
  ****************************************************************************/
 
 #include <nuttx/config.h>
+#include <nuttx/nuttx.h>
 #include <debug.h>
 
 #include <errno.h>
@@ -70,8 +71,8 @@
   #define L86_M33_BAUD_RATE 4800
 #elif CONFIG_L86_M33_BAUD == 9600
     #define L86_M33_BAUD_RATE 9600
-// #elif CONFIG_L86_M33_BAUD == 14400
-//   #define L86_M33_BAUD_RATE 14400
+#elif CONFIG_L86_M33_BAUD == 14400
+  #define L86_M33_BAUD_RATE 14400
 #elif CONFIG_L86_M33_BAUD == 19200
   #define L86_M33_BAUD_RATE 19200
 #elif CONFIG_L86_M33_BAUD == 38400
@@ -105,9 +106,11 @@
 
 typedef struct
 {
-  FAR struct file uart;     /* UART interface */
+  FAR struct file uart;            /* UART interface */
   struct sensor_lowerhalf_s lower; /* UORB lower-half */
-  mutex_t devlock;          /* Exclusive access */
+  mutex_t devlock;                 /* Exclusive access */
+  sem_t run;                       /* Start/stop collection thread */
+  bool enabled;                    /* If module has started*/
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   int16_t crefs; /* Number of open references */
 #endif
@@ -132,7 +135,7 @@ static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
 static const struct sensor_ops_s g_sensor_ops =
 {
   // .control = l86m33_control,
-  // .activate = l86m33_activate,
+  .activate = l86m33_activate,
   .set_interval = l86m33_set_interval,
 };
 
@@ -167,14 +170,15 @@ static const struct sensor_ops_s g_sensor_ops =
  *   Sends command L86-M33 GNSS device.
  *
  * Arguments:
- *    uart      -  Pointer to file struct of L86-M33 device
+ *    dev       -  Pointer L86-M33 priv struct
  *    cmd       -  L86M33_COMMAND enum
  *    arg       -  Dependent on command type. Could be used for preset
  *                 enum, numeric args or struct pointers
  ****************************************************************************/
-bool send_command(FAR struct file *uart, L86M33_PMTK_COMMAND cmd, unsigned long arg){
+bool send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg){
   char buf[50];
   int bw1;
+  nxmutex_lock(&dev->devlock);
   switch (cmd)
   {
     case CMD_HOT_START:
@@ -206,12 +210,14 @@ bool send_command(FAR struct file *uart, L86M33_PMTK_COMMAND cmd, unsigned long 
   char checksum = calculate_checksum(buf+1, bw1-1);
   int bw2 = snprintf(buf+bw1, 50-bw1, "*%02X\r\n", checksum);
   sninfo("About to send: %s size: %d\n", buf, bw1+bw2);
-  int bw3 = file_write(uart, buf, bw1+bw2);
+  int bw3 = file_write(&dev->uart, buf, bw1+bw2);
   sninfo("Bytes written: %d\n", bw3);
+  nxmutex_unlock(&dev->devlock);
+  // TODO: Check for ACK based on command sent
   return bw3;
 }
 
-char* read_line(FAR struct file *uart){
+void read_line(FAR struct file *uart){
   int line_len = 0;
   char line[MINMEA_MAX_LENGTH];
   char next_char;
@@ -226,6 +232,19 @@ char* read_line(FAR struct file *uart){
   line[line_len] = '\0';
   return line;
 }
+
+/****************************************************************************
+ * Name: nau7802_activate
+ ****************************************************************************/
+
+static int l86m33_activate(FAR struct sensor_lowerhalf_s *lower,
+                            FAR struct file *filep, bool enable)
+{
+  FAR l86m33_dev_s *dev = container_of(lower, FAR l86m33_dev_s, lower);
+  send_command(dev, CMD_STANDBY_MODE, 0);
+  return 0;
+}
+
 
 /****************************************************************************
  * Name: l86m33_set_interval
@@ -271,9 +290,23 @@ static int l86m33_thread(int argc, FAR char *argv[]){
       (FAR l86m33_dev_s *)((uintptr_t)strtoul(argv[1], NULL, 16));
   struct sensor_gnss gps;
   memset(&gps, 0, sizeof(gps));
+  dev->enabled = true;
+  int err;
   
   /* Read full line of NMEA output */
   for(;;){
+    /* If the sensor is disabled we wait indefinitely */
+    if (!dev->enabled)
+    {
+      err = nxsem_wait(&dev->run);
+      if (err < 0)
+        {
+          continue;
+        }
+    }
+
+    // Mutex required because some commands send ACKS
+    nxmutex_lock(&dev->devlock);
     int line_len = 0;
     char line[MINMEA_MAX_LENGTH];
     char next_char;
@@ -374,6 +407,7 @@ static int l86m33_thread(int argc, FAR char *argv[]){
         break;
       }
     }
+    nxmutex_unlock(&dev->devlock);
   }
   
   return 0;
@@ -394,9 +428,6 @@ static int l86m33_thread(int argc, FAR char *argv[]){
  *    uartpath  -  The path to the UART character driver connected to the
  *                 transceiver
  *    devno     -  The device number to use for the topic (i.e. /dev/mag0)
- *    br        -  The baud rate to configure the device with (i.e 9600)
- *    ur        -  The update rate to configure the device with (i.e 1)
- *
  ****************************************************************************/
 
 int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno)
@@ -406,8 +437,8 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   int err = 0;
   // int retries = 0;
   
-  DEBUGASSERT(uartpath != NULL);
   DEBUGASSERT(devpath != NULL);
+  DEBUGASSERT(uartpath != NULL);
   
   /* Initialize device structure */
   
@@ -429,6 +460,15 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
       goto free_mem;
     }
 
+  /* Initialize semaphore */
+
+  err = nxsem_init(&priv->run, 0, 0);
+  if (err < 0)
+    {
+      snerr("Failed to register nau7802 driver: %d\n", err);
+      goto destroy_mutex;
+    }
+
   /* Open UART interface for use */
 
   err = file_open(&priv->uart, uartpath, O_RDWR | O_CLOEXEC);
@@ -436,7 +476,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
     {
       wlerr("Failed to open UART interface %s for L86-M33 driver: %d\n",
             uartpath, err);
-      goto destroy_mutex;
+      goto destroy_sem;
     }
 
   /* Setup sensor with configured settings */
@@ -444,7 +484,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   read_line(&priv->uart); // Wait until module is powered on
 
   #ifdef CONFIG_SERIAL_TERMIOS
-  send_command(&priv->uart, SET_NMEA_BAUDRATE, L86_M33_BAUD_RATE);
+  send_command(priv, SET_NMEA_BAUDRATE, L86_M33_BAUD_RATE);
   nxsig_usleep(20000);
   file_ioctl(&priv->uart, TCGETS, &opt);
   cfmakeraw(&opt);
@@ -497,7 +537,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   for (int i = 0; i < 5; ++i){
     read_line(&priv->uart);
   }
-  send_command(&priv->uart, SET_POS_FIX, L86_M33_FIX_INT);
+  send_command(priv, SET_POS_FIX, L86_M33_FIX_INT);
   #endif
 
   /* Register UORB Sensor */
@@ -539,6 +579,8 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
       sensor_unregister(&priv->lower, devno);
     close_file:
       file_close(&priv->uart);
+    destroy_sem:
+      nxsem_destroy(&priv->run);
     destroy_mutex:
       nxmutex_destroy(&priv->devlock);
     free_mem:
