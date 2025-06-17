@@ -1,5 +1,5 @@
 /****************************************************************************
- * include/nuttx/sensors/l86m33.h
+ * include/nuttx/sensors/l86xxx.h
  *
  * NOTE: EXPERIMENTAL DRIVER
  *
@@ -22,8 +22,8 @@
  *
  ****************************************************************************/
 
-#ifndef __INCLUDE_NUTTX_SENSORS_L86M33_H
-#define __INCLUDE_NUTTX_SENSORS_L86M33_H
+#ifndef __INCLUDE_NUTTX_SENSORS_L86XXX_H
+#define __INCLUDE_NUTTX_SENSORS_L86XXX_H
 
 /****************************************************************************
  * Included Files
@@ -44,16 +44,6 @@
  ****************************************************************************/
 
 typedef enum {
-  L86M33_BAUD_4800 = 4800,
-  L86M33_BAUD_9600 = 9600,
-  L86M33_BAUD_14400 = 14400,
-  L86M33_BAUD_19200 = 19200,
-  L86M33_BAUD_38400 = 38400,
-  L86M33_BAUD_57600 = 57600,
-  L86M33_BAUD_115200 = 115200
-} L866M33_SUPPORTED_BAUD_RATES;
-
-typedef enum {
   CMD_HOT_START = 101,
   CMD_WARM_START = 102,
   CMD_COLD_START = 103,
@@ -62,14 +52,14 @@ typedef enum {
   SET_POS_FIX = 220,
   SET_NMEA_BAUDRATE = 251,
   FR_MODE = 886,
-} L86M33_PMTK_COMMAND;
+} L86XXX_PMTK_COMMAND;
 
 typedef enum {
   NORMAL = 0,
   FITNESS = 1,
   AVIATION = 2,
   BALLOON = 3,
-} L866M33_FR_MODE_OPTIONS;
+} L86XXX_FR_MODE_OPTIONS;
 
 /****************************************************************************
  * Public Functions Prototypes
@@ -91,6 +81,6 @@ typedef enum {
  *
  ****************************************************************************/
 
-int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno);
+int l86xxx_register(FAR const char *devpath, FAR const char *uartpath, int devno);
 
-#endif /* __INCLUDE_NUTTX_SENSORS_L86M33_H */
+#endif /* __INCLUDE_NUTTX_SENSORS_L86XXX_H */

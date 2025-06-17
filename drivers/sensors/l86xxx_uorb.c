@@ -1,5 +1,5 @@
 /****************************************************************************
- * drivers/sensors/l86m33_uorb.c
+ * drivers/sensors/l86mxx_uorb.c
  * 
  * NOTE: EXPERIMENTAL DRIVER
  *
@@ -53,40 +53,40 @@
 #include <nuttx/sensors/sensor.h>
 #include <minmea/minmea.h>
 
-#include <nuttx/sensors/l86m33.h>
+#include <nuttx/sensors/l86xxx.h>
 
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
-#ifndef CONFIG_SENSORS_L86_M33_THREAD_STACKSIZE
-#define CONFIG_SENSORS_L86_M33_THREAD_STACKSIZE 10000
+#ifndef CONFIG_SENSORS_L86_XXX_THREAD_STACKSIZE
+#define CONFIG_SENSORS_L86_XXX_THREAD_STACKSIZE 10000
 #endif
 
-#ifndef CONFIG_L86_M33_BAUD
-#define CONFIG_L86_M33_BAUD 9600
+#ifndef CONFIG_L86_XXX_BAUD
+#define CONFIG_L86_XXX_BAUD 9600
 #endif
 
-#if CONFIG_L86_M33_BAUD == 4800
-  #define L86_M33_BAUD_RATE 4800
-#elif CONFIG_L86_M33_BAUD == 9600
-    #define L86_M33_BAUD_RATE 9600
-#elif CONFIG_L86_M33_BAUD == 14400
-  #define L86_M33_BAUD_RATE 14400
-#elif CONFIG_L86_M33_BAUD == 19200
-  #define L86_M33_BAUD_RATE 19200
-#elif CONFIG_L86_M33_BAUD == 38400
-  #define L86_M33_BAUD_RATE 38400
-#elif CONFIG_L86_M33_BAUD == 57600
-  #define L86_M33_BAUD_RATE 57600
-#elif CONFIG_L86_M33_BAUD == 115200
-  #define L86_M33_BAUD_RATE 115200
+#if CONFIG_L86_XXX_BAUD == 4800
+  #define L86_XXX_BAUD_RATE 4800
+#elif CONFIG_L86_XXX_BAUD == 9600
+    #define L86_XXX_BAUD_RATE 9600
+#elif CONFIG_L86_XXX_BAUD == 14400
+  #define L86_XXX_BAUD_RATE 14400
+#elif CONFIG_L86_XXX_BAUD == 19200
+  #define L86_XXX_BAUD_RATE 19200
+#elif CONFIG_L86_XXX_BAUD == 38400
+  #define L86_XXX_BAUD_RATE 38400
+#elif CONFIG_L86_XXX_BAUD == 57600
+  #define L86_XXX_BAUD_RATE 57600
+#elif CONFIG_L86_XXX_BAUD == 115200
+  #define L86_XXX_BAUD_RATE 115200
 #else
   #error "Invalid baud rate. Supported baud rates are: 4800, 5600, 14400, 19200, 38400, 57600, 115200"
 #endif
 
-#ifdef CONFIG_L86_M33_FIX_INT
-#define L86_M33_FIX_INT CONFIG_L86_M33_FIX_INT
+#ifdef CONFIG_L86_XXX_FIX_INT
+#define L86_XXX_FIX_INT CONFIG_L86_XXX_FIX_INT
 #endif
 
 /* Helper to get array length */
@@ -111,22 +111,22 @@ typedef struct
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   int16_t crefs; /* Number of open references */
 #endif
-} l86m33_dev_s;
+} l86xxx_dev_s;
 
 /****************************************************************************
  * Private Function Prototypes
  ****************************************************************************/
 
-static int l86m33_control(FAR struct sensor_lowerhalf_s *lower,
+static int l86xxx_control(FAR struct sensor_lowerhalf_s *lower,
                          FAR struct file *filep, int cmd, unsigned long arg);
-static int l86m33_activate(FAR struct sensor_lowerhalf_s *lower,
+static int l86xxx_activate(FAR struct sensor_lowerhalf_s *lower,
                           FAR struct file *filep, bool enable);
-static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
+static int l86xxx_set_interval(FAR struct sensor_lowerhalf_s *lower,
                                      FAR struct file *filep,
                                      FAR uint32_t *period_us);
 char calculate_checksum(char* data, int len);
-int send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg);
-void read_line(l86m33_dev_s *dev);
+int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned long arg);
+void read_line(l86xxx_dev_s *dev);
 
 /****************************************************************************
  * Private Data
@@ -134,9 +134,9 @@ void read_line(l86m33_dev_s *dev);
 
 static const struct sensor_ops_s g_sensor_ops =
 {
-  .control = l86m33_control,
-  .activate = l86m33_activate,
-  .set_interval = l86m33_set_interval,
+  .control = l86xxx_control,
+  .activate = l86xxx_activate,
+  .set_interval = l86xxx_set_interval,
 };
 
 /****************************************************************************
@@ -167,12 +167,12 @@ static const struct sensor_ops_s g_sensor_ops =
  * Name: send_command
  *
  * Description:
- *   Sends command L86-M33 GNSS device and waits for acknowledgement 
+ *   Sends command L86-XXX GNSS device and waits for acknowledgement 
  *   if command supports it.
  *
  * Arguments:
- *    dev       -  Pointer L86-M33 priv struct
- *    cmd       -  L86M33_COMMAND enum
+ *    dev       -  Pointer L86-XXX priv struct
+ *    cmd       -  L86XXX_COMMAND enum
  *    arg       -  Dependent on command type. Could be used for preset
  *                 enum, numeric args or struct pointers
  * 
@@ -184,7 +184,7 @@ static const struct sensor_ops_s g_sensor_ops =
  *  2 - Valid packet, but action failed
  *  3 - Valid packet, action succeeded 
  ****************************************************************************/
-int send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg){
+int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned long arg){
   char buf[50];
   int bw1;
   nxmutex_lock(&dev->devlock);
@@ -254,7 +254,7 @@ int send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg){
   return dev->buffer[13] - '0';
 }
 
-void read_line(l86m33_dev_s *dev){
+void read_line(l86xxx_dev_s *dev){
   memset(dev->buffer, '\0', MINMEA_MAX_LENGTH);
   int line_len = 0;
   char next_char;
@@ -270,26 +270,26 @@ void read_line(l86m33_dev_s *dev){
 }
 
  /****************************************************************************
- * Name: l86m33_control
+ * Name: l86xxx_control
  *
  * Description:
- *   Send commands to the l86m33
+ *   Send commands to the l86xxx GNSS module
  ****************************************************************************/
-static int l86m33_control(FAR struct sensor_lowerhalf_s *lower,
+static int l86xxx_control(FAR struct sensor_lowerhalf_s *lower,
                          FAR struct file *filep, int cmd, unsigned long arg)
 {
-  FAR l86m33_dev_s *dev = container_of(lower, FAR l86m33_dev_s, lower);
-  return send_command(dev, (L86M33_PMTK_COMMAND)cmd, arg);
+  FAR l86xxx_dev_s *dev = container_of(lower, FAR l86xxx_dev_s, lower);
+  return send_command(dev, (L86XXX_PMTK_COMMAND)cmd, arg);
 }
 
 /****************************************************************************
  * Name: nau7802_activate
  ****************************************************************************/
 
-static int l86m33_activate(FAR struct sensor_lowerhalf_s *lower,
+static int l86xxx_activate(FAR struct sensor_lowerhalf_s *lower,
                             FAR struct file *filep, bool enable)
 {
-  FAR l86m33_dev_s *dev = container_of(lower, FAR l86m33_dev_s, lower);
+  FAR l86xxx_dev_s *dev = container_of(lower, FAR l86xxx_dev_s, lower);
   
   /* If not already enabled, start gps*/
   if (enable && !dev->enabled)
@@ -309,19 +309,19 @@ static int l86m33_activate(FAR struct sensor_lowerhalf_s *lower,
 
 
 /****************************************************************************
- * Name: l86m33_set_interval
+ * Name: l86xxx_set_interval
  *
  * Description:
- *   Set position fix interval of L86-M33 GNSS module
+ *   Set position fix interval of L86-XXX GNSS module
  * 
  * Returns:
  *   -1 if invalid interval, else return value from send_command
  ****************************************************************************/
-static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
+static int l86xxx_set_interval(FAR struct sensor_lowerhalf_s *lower,
                                      FAR struct file *filep,
                                      FAR uint32_t *period_us)
 {
-  FAR l86m33_dev_s *dev = container_of(lower, FAR l86m33_dev_s, lower);
+  FAR l86xxx_dev_s *dev = container_of(lower, FAR l86xxx_dev_s, lower);
   int fix_interval = *period_us;
   if (fix_interval < 100 || fix_interval > 10000){
     // Invalid period
@@ -332,15 +332,15 @@ static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
 }
 
  /****************************************************************************
- * Name: l86m33_thread
+ * Name: l86xxx_thread
  *
  * Description:
- *   Kernel thread to poll the l86m33
+ *   Kernel thread to poll the l86xxx
  ****************************************************************************/
 
-static int l86m33_thread(int argc, FAR char *argv[]){
-  FAR l86m33_dev_s *dev =
-      (FAR l86m33_dev_s *)((uintptr_t)strtoul(argv[1], NULL, 16));
+static int l86xxx_thread(int argc, FAR char *argv[]){
+  FAR l86xxx_dev_s *dev =
+      (FAR l86xxx_dev_s *)((uintptr_t)strtoul(argv[1], NULL, 16));
   struct sensor_gnss gps;
   memset(&gps, 0, sizeof(gps));
   dev->enabled = true;
@@ -423,7 +423,7 @@ static int l86m33_thread(int argc, FAR char *argv[]){
         }
         break;
       }
-      /* GSV and GLL data are transmitted by the l86-m33 but do not provide
+      /* GSV and GLL data are transmitted by the l86-XXX but do not provide
       additional information. Since GLL is always the last message transmitted,
       events will be pushed whenever that sentence is read */
       case MINMEA_SENTENCE_GLL:
@@ -460,10 +460,10 @@ static int l86m33_thread(int argc, FAR char *argv[]){
  ****************************************************************************/
 
 /****************************************************************************
- * Name: l86m33_register
+ * Name: l86xxx_register
  *
  * Description:
- *   Register the L86-M33 GNSS device driver.
+ *   Register the L86-XXX GNSS device driver.
  *
  * Arguments:
  *    devpath   -  The device path to use for the driver
@@ -472,9 +472,9 @@ static int l86m33_thread(int argc, FAR char *argv[]){
  *    devno     -  The device number to use for the topic (i.e. /dev/mag0)
  ****************************************************************************/
 
-int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno)
+int l86xxx_register(FAR const char *devpath, FAR const char *uartpath, int devno)
 {
-  FAR l86m33_dev_s *priv = NULL;
+  FAR l86xxx_dev_s *priv = NULL;
   struct termios opt;
   int err;
   // int retries = 0;
@@ -484,21 +484,21 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   
   /* Initialize device structure */
   
-  priv = kmm_zalloc(sizeof(l86m33_dev_s));
+  priv = kmm_zalloc(sizeof(l86xxx_dev_s));
   if (priv == NULL)
   {
-      snerr("Failed to allocate instance of L86-M33 driver.\n");
+      snerr("Failed to allocate instance of L86-XXX driver.\n");
       return -ENOMEM;
     }
 
-  memset(priv, 0, sizeof(l86m33_dev_s));
+  memset(priv, 0, sizeof(l86xxx_dev_s));
 
   /* Initialize mutex */
 
   err = nxmutex_init(&priv->devlock);
   if (err < 0)
     {
-      snerr("Failed to initialize mutex for L86-M33 device: %d\n", err);
+      snerr("Failed to initialize mutex for L86-XXX device: %d\n", err);
       goto free_mem;
     }
 
@@ -516,7 +516,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   err = file_open(&priv->uart, uartpath, O_RDWR | O_CLOEXEC);
   if (err < 0)
     {
-      wlerr("Failed to open UART interface %s for L86-M33 driver: %d\n",
+      wlerr("Failed to open UART interface %s for L86-XXX driver: %d\n",
             uartpath, err);
       goto destroy_sem;
     }
@@ -526,7 +526,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   read_line(priv); // Wait until module is powered on
 
   #ifdef CONFIG_SERIAL_TERMIOS
-  err = send_command(priv, SET_NMEA_BAUDRATE, L86_M33_BAUD_RATE);
+  err = send_command(priv, SET_NMEA_BAUDRATE, L86_XXX_BAUD_RATE);
   if (err != 3)
     {
       snwarn("Couldn't set baud rate of device: %d\n", err);
@@ -535,7 +535,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   nxsig_usleep(20000);
   file_ioctl(&priv->uart, TCGETS, &opt);
   cfmakeraw(&opt);
-  switch(L86_M33_BAUD_RATE){
+  switch(L86_XXX_BAUD_RATE){
     case 4800:
     {
       cfsetispeed(&opt, 4800);
@@ -591,7 +591,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
     read_line(priv);
   }
 
-  err = send_command(priv, SET_POS_FIX, L86_M33_FIX_INT);
+  err = send_command(priv, SET_POS_FIX, L86_XXX_FIX_INT);
   if (err != 3)
     {
       snwarn("Couldn't set position fix interval, %d\n", err);
@@ -606,7 +606,7 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   err = sensor_register(&priv->lower, devno);
   if (err < 0)
     {
-      snerr("Failed to register L86-M33 driver: %d\n", err);
+      snerr("Failed to register L86-XXX driver: %d\n", err);
       goto close_file;
     }
 
@@ -616,17 +616,17 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   argv[0] = arg1;
   argv[1] = NULL;
   
-  err = kthread_create("l86m33_thread", SCHED_PRIORITY_DEFAULT,
-                      CONFIG_SENSORS_L86_M33_THREAD_STACKSIZE,
-                      l86m33_thread, argv);
+  err = kthread_create("l86xxx_thread", SCHED_PRIORITY_DEFAULT,
+                      CONFIG_SENSORS_L86_XXX_THREAD_STACKSIZE,
+                      l86xxx_thread, argv);
 
   if (err < 0)
     {
-      snerr("Failed to create the l86m33 notification kthread\n");
+      snerr("Failed to create the l86xxx notification kthread\n");
       goto sensor_unreg;
     }
 
-    sninfo("Registered L86-M33 driver with kernel polling thread with baud rate %d and update rate %d", L86_M33_BAUD_RATE, L86_M33_FIX_INT);
+    sninfo("Registered L86-XXX driver with kernel polling thread with baud rate %d and update rate %d", L86_XXX_BAUD_RATE, L86_XXX_FIX_INT);
     
   /* Cleanup items on error */
   
