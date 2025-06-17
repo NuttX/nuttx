@@ -277,7 +277,8 @@ void read_line(l86m33_dev_s *dev){
 static int l86m33_control(FAR struct sensor_lowerhalf_s *lower,
                          FAR struct file *filep, int cmd, unsigned long arg)
 {
-  return 0;
+  FAR l86m33_dev_s *dev = container_of(lower, FAR l86m33_dev_s, lower);
+  return send_command(dev, (L86M33_PMTK_COMMAND)cmd, arg);
 }
 
 /****************************************************************************
