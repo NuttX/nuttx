@@ -223,7 +223,7 @@ int send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg){
   
   char checksum = calculate_checksum(buf+1, bw1-1);
   int bw2 = snprintf(buf+bw1, 50-bw1, "*%02X\r\n", checksum);
-  sninfo("About to send: %s size: %d\n", buf, bw1+bw2);
+  sninfo("Sending command: %s\n", buf);
   int err = file_write(&dev->uart, buf, bw1+bw2);
   if (err < 0)
   {
@@ -243,12 +243,13 @@ int send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg){
   // Some commands will send ACKs, wait for them here before unlocking the mutex
   memset(buf, '\0', 50);
   snprintf(buf, 50, "$PMTK001,%d", cmd); // ACK message will be $PMTK001,<cmd num>,<flag>
-  sninfo("Checking for %s\n", buf);
+  sninfo("Waiting for ACK...\n");
   for(;;)
   {
     read_line(dev);
     if (strncmp(buf, dev->buffer, strlen(buf)) == 0) break;
   }
+  sninfo("ACK received!\n");
   nxmutex_unlock(&dev->devlock);
   return dev->buffer[13] - '0';
 }
