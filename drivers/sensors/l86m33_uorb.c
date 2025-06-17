@@ -213,6 +213,10 @@ int send_command(l86m33_dev_s *dev, L86M33_PMTK_COMMAND cmd, unsigned long arg){
       bw1 = snprintf(buf, 50, "$PMTK%d,%d", cmd, (int)arg);
       break;
     }
+    case FR_MODE:
+    {
+      bw1 = snprintf(buf, 50, "$PMTK%d,%d", cmd, (int)arg);
+    }
     default:
       break;
   }
@@ -307,6 +311,9 @@ static int l86m33_activate(FAR struct sensor_lowerhalf_s *lower,
  *
  * Description:
  *   Set position fix interval of L86-M33 GNSS module
+ * 
+ * Returns:
+ *   -1 if invalid interval, else return value from send_command
  ****************************************************************************/
 static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
                                      FAR struct file *filep,
@@ -318,8 +325,8 @@ static int l86m33_set_interval(FAR struct sensor_lowerhalf_s *lower,
     // Invalid period
     return -1;
   }
-  send_command(dev, SET_POS_FIX, fix_interval);
-  return 0;
+  int ret = send_command(dev, SET_POS_FIX, fix_interval);
+  return ret;
 }
 
  /****************************************************************************
@@ -431,12 +438,12 @@ static int l86m33_thread(int argc, FAR char *argv[]){
       }
       case MINMEA_INVALID:
       {
-        // snerr("Invalid NMEA sentence read %s, skipping line...\n", line);
+        sninfo("Invalid NMEA sentence read %s, skipping line...\n", dev->buffer);
         break;
       }
       case MINMEA_UNKNOWN:
       {
-        // snerr("Unknown NMEA sentence read %s, skipping line...\n", line);
+        sninfo("Unknown NMEA sentence read %s, skipping line...\n", dev->buffer);
         break;
       }
     }
@@ -519,9 +526,9 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
   #ifdef CONFIG_SERIAL_TERMIOS
   err = send_command(priv, SET_NMEA_BAUDRATE, L86_M33_BAUD_RATE);
   if (err != 3)
-  {
-    snwarn("Couldn't set baud rate of device: %d\n", err);
-  }
+    {
+      snwarn("Couldn't set baud rate of device: %d\n", err);
+    }
   
   nxsig_usleep(20000);
   file_ioctl(&priv->uart, TCGETS, &opt);
@@ -570,15 +577,18 @@ int l86m33_register(FAR const char *devpath, FAR const char *uartpath, int devno
       break;
     }
   }
+
   err = file_ioctl(&priv->uart, TCSETS, &opt);
   if (err < 0)
     {
       snwarn("Couldn't change baud rate of U(S)ART interface: %d\n", err); 
     }
+
   // Wait for module to update
   for (int i = 0; i < 5; ++i){
     read_line(priv);
   }
+
   err = send_command(priv, SET_POS_FIX, L86_M33_FIX_INT);
   if (err != 3)
     {

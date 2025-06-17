@@ -64,6 +64,13 @@ typedef enum {
   FR_MODE = 886,
 } L86M33_PMTK_COMMAND;
 
+typedef enum {
+  NORMAL = 0,
+  FITNESS = 1,
+  AVIATION = 2,
+  BALLOON = 3,
+} L866M33_FR_MODE_OPTIONS;
+
 /****************************************************************************
  * Public Functions Prototypes
  ****************************************************************************/
