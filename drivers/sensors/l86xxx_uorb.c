@@ -223,7 +223,7 @@ int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned long arg){
   
   char checksum = calculate_checksum(buf+1, bw1-1);
   int bw2 = snprintf(buf+bw1, 50-bw1, "*%02X\r\n", checksum);
-  sninfo("Sending command: %s\n", buf);
+  sninfo("Sending command: %s", buf);
   int err = file_write(&dev->uart, buf, bw1+bw2);
   if (err < 0)
   {
@@ -440,12 +440,12 @@ static int l86xxx_thread(int argc, FAR char *argv[]){
       }
       case MINMEA_INVALID:
       {
-        sninfo("Invalid NMEA sentence read %s, skipping line...\n", dev->buffer);
+        // sninfo("Invalid NMEA sentence read %s, skipping line...\n", dev->buffer);
         break;
       }
       case MINMEA_UNKNOWN:
       {
-        sninfo("Unknown NMEA sentence read %s, skipping line...\n", dev->buffer);
+        // sninfo("Unknown NMEA sentence read %s, skipping line...\n", dev->buffer);
         break;
       }
     }
@@ -626,7 +626,7 @@ int l86xxx_register(FAR const char *devpath, FAR const char *uartpath, int devno
       goto sensor_unreg;
     }
 
-    sninfo("Registered L86-XXX driver with kernel polling thread with baud rate %d and update rate %d", L86_XXX_BAUD_RATE, L86_XXX_FIX_INT);
+  sninfo("Registered L86-XXX driver with kernel polling thread with baud rate %d and update rate %d", L86_XXX_BAUD_RATE, L86_XXX_FIX_INT);
     
   /* Cleanup items on error */
   
