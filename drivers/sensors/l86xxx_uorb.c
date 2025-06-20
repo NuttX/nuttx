@@ -124,9 +124,9 @@ static int l86xxx_activate(FAR struct sensor_lowerhalf_s *lower,
 static int l86xxx_set_interval(FAR struct sensor_lowerhalf_s *lower,
                                      FAR struct file *filep,
                                      FAR uint32_t *period_us);
-char calculate_checksum(char* data, int len);
-int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned long arg);
-void read_line(l86xxx_dev_s *dev);
+static char calculate_checksum(char* data, int len);
+static int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned long arg);
+static void read_line(l86xxx_dev_s *dev);
 
 /****************************************************************************
  * Private Data
@@ -155,7 +155,7 @@ static const struct sensor_ops_s g_sensor_ops =
  * Returns:
  *  1-byte checksum value to be interpreted as a hex byte
  ****************************************************************************/
- char calculate_checksum(char* data, int len){
+ static char calculate_checksum(char* data, int len){
   char ret = 0;
   for (int i = 0; i < len; ++i){
     ret = ret ^ *(data + i);
@@ -184,7 +184,7 @@ static const struct sensor_ops_s g_sensor_ops =
  *  2 - Valid packet, but action failed
  *  3 - Valid packet, action succeeded 
  ****************************************************************************/
-int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned long arg){
+static int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned long arg){
   char buf[50];
   int bw1;
   nxmutex_lock(&dev->devlock);
@@ -254,7 +254,7 @@ int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned long arg){
   return dev->buffer[13] - '0';
 }
 
-void read_line(l86xxx_dev_s *dev){
+static void read_line(l86xxx_dev_s *dev){
   memset(dev->buffer, '\0', MINMEA_MAX_LENGTH);
   int line_len = 0;
   char next_char;
