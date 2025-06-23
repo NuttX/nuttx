@@ -92,7 +92,6 @@
 /* Helper to get array length */
 
 #define MINMEA_MAX_LENGTH    256
-#define array_len(arr) ((sizeof(arr)) / sizeof((arr)[0]))
 
 /****************************************************************************
  * Private Data Types
@@ -107,7 +106,7 @@ typedef struct
   mutex_t devlock;                    /* Exclusive access */
   sem_t run;                          /* Start/stop collection thread */
   bool enabled;                       /* If module has started */
-  char buffer[MINMEA_MAX_LENGTH]; /* Buffer for UART interface */
+  char buffer[MINMEA_MAX_LENGTH];     /* Buffer for UART interface */
 #ifndef CONFIG_DISABLE_PSEUDOFS_OPERATIONS
   int16_t crefs; /* Number of open references */
 #endif
@@ -216,6 +215,7 @@ static int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned lon
     case FR_MODE:
     {
       bw1 = snprintf(buf, 50, "$PMTK%d,%d", cmd, (int)arg);
+      break;
     }
     default:
       break;
