@@ -23,7 +23,7 @@ baud rate of the L86-XXX series of GNSS modules.
 The driver supports changing the default baud rate and update rate of the GNSS module.
 As a result, you will also need to enable serial TERMIOS support (``CONFIG_SERIAL_TERMIOS``).
 The baud rate and update rate of the GNSS module can be configured using the ``L86_XXX_BAUD`` and ``L86_XXX_FIX_INT`` options respectively.
-Note that a faster update rate will require a higher baud rate to support it and the supported baud rates for the L86-XXX series of GNSS modules are: 4800, 9600, 14400, 19200, 38400, 57600 and 115200
+Note that a faster update rate will require a higher baud rate to support it and the supported baud rates for the L86-XXX series of GNSS modules are: 4800, 9600, 14400, 19200, 38400, 57600 and 115200.
 The baud rate and update rates of the module are changed at registration time.
 
 .. code-block:: c
@@ -72,10 +72,11 @@ Any interval rate outside of the supported range will result in a failed call to
 The ``orb_ioctl`` interface allows one to send proprietary 'PMTK' commands to the L86-XXX GNSS module. It effectively works
 as a wrapper for the command framework outlined by Quectel. The return value of calls to ``orb_ioctl`` mimic the return values
 from command acknowledgements from the GNSS module:
-- 0: Invalid packet
-- 1: Unsupported packet type
-- 2: Valid packet, but action failed
-- 3: Valid packet, action succeeded  
+
+* 0: Invalid packet
+* 1: Unsupported packet type
+* 2: Valid packet, but action failed
+* 3: Valid packet, action succeeded  
 
 The supported commands are their arguments are listed below.
 
@@ -131,6 +132,7 @@ Used to modify the position fix interval of the GNSS module. The argument is an 
 ---------------------
 Used to modify the baud rate of the GNSS module. The argument is an integer representing a supported baud rate, default value is 9600. There is no acknowledgement for this command.
 Upon sending this command, the baud rate of the UART interface used to communicate with the module is also modified.
+Supported baud rates for the L86-XXX series of GNSS modules are: 4800, 9600, 14400, 19200, 38400, 57600 and 115200.
 
 .. code-block:: c
 
@@ -138,7 +140,7 @@ Upon sending this command, the baud rate of the UART interface used to communica
 
 ``FR_MODE``
 -----------
-Used to set the navigation mode of the GNSS module. The argument is an ``L86XXX_FR_MODE_OPTIONS`` L86XXX_FR_MODE_OPTIONS. The acknowledgement for this command is handled by the ``ioctl`` call.
+Used to set the navigation mode of the GNSS module. The argument is an ``L86XXX_FR_MODE_OPTIONS`` enum. The acknowledgement for this command is handled by the ``ioctl`` call.
 
 .. code-block:: c
 

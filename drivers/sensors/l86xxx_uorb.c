@@ -124,6 +124,7 @@ static int l86xxx_set_interval(FAR struct sensor_lowerhalf_s *lower,
                                      FAR struct file *filep,
                                      FAR uint32_t *period_us);
 static char calculate_checksum(char* data, int len);
+static int set_baud_rate(l86xxx_dev_s *dev, int br);
 static int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned long arg);
 static void read_line(l86xxx_dev_s *dev);
 
@@ -160,6 +161,84 @@ static const struct sensor_ops_s g_sensor_ops =
     ret = ret ^ *(data + i);
   }
   return ret;
+}
+
+/****************************************************************************
+ * Name: set_baud_rate
+ *
+ * Description:
+ *   Sets baud rate of UART interface
+ *
+ * Arguments:
+ *    dev       -  Pointer L86-XXX priv struct
+ *    br        -  Baud rate
+ * 
+ * Returns:
+ *  negative number - Command failed during writing
+ *  3               - Command succeeded, baud rate changed
+ ****************************************************************************/
+static int set_baud_rate(l86xxx_dev_s *dev, int br){
+  struct termios opt;
+  int err;
+  file_ioctl(&dev->uart, TCGETS, &opt);
+  cfmakeraw(&opt);
+  switch(br){
+    case 4800:
+    {
+      cfsetispeed(&opt, 4800);
+      cfsetospeed(&opt, 4800);
+      break;
+    }
+    case 9600:
+    {
+      cfsetispeed(&opt, 9600);
+      cfsetospeed(&opt, 9600);
+      break;
+    }
+    case 14400:
+    {
+      cfsetispeed(&opt, 14400);
+      cfsetospeed(&opt, 14400);
+      break;
+    }
+    case 19200:
+    {
+      cfsetispeed(&opt, 19200);
+      cfsetospeed(&opt, 19200);
+      break;
+    }
+    case 38400:
+    {
+      cfsetispeed(&opt, 38400);
+      cfsetospeed(&opt, 38400);
+      break;
+    }
+    case 57600:
+    {
+      cfsetispeed(&opt, 57600);
+      cfsetospeed(&opt, 57600);
+      break;
+    }
+    case 115200:
+    {
+      cfsetispeed(&opt, 115200);
+      cfsetospeed(&opt, 115200);
+      break;
+    }
+  }
+
+  err = file_ioctl(&dev->uart, TCSETS, &opt);
+  if (err < 0)
+    {
+      snwarn("Couldn't change baud rate of U(S)ART interface: %d\n", err); 
+      return err;
+    }
+
+  // Wait for module to update
+  for (int i = 0; i < 5; ++i){
+    read_line(dev);
+  }
+  return 3;
 }
 
 /****************************************************************************
@@ -233,11 +312,19 @@ static int send_command(l86xxx_dev_s *dev, L86XXX_PMTK_COMMAND cmd, unsigned lon
 
   // These commands do not send ACKs so just return after they've been written
   if (cmd == CMD_HOT_START || cmd == CMD_WARM_START || cmd == CMD_COLD_START ||
-      cmd == CMD_FULL_COLD_START || cmd == SET_NMEA_BAUDRATE)
+      cmd == CMD_FULL_COLD_START)
   {
         
     nxmutex_unlock(&dev->devlock);
     return 3;
+  }
+
+  /* Setting baud rate also doesn't send an ACK but the interface baud rate 
+  needs to be updated */
+  if (cmd == SET_NMEA_BAUDRATE)
+  {
+    nxsig_usleep(20000); // Should wait for a bit before changing interface baud rate
+    return set_baud_rate(dev, (int)arg);
   }
 
   // Some commands will send ACKs, wait for them here before unlocking the mutex
@@ -475,7 +562,6 @@ static int l86xxx_thread(int argc, FAR char *argv[]){
 int l86xxx_register(FAR const char *devpath, FAR const char *uartpath, int devno)
 {
   FAR l86xxx_dev_s *priv = NULL;
-  struct termios opt;
   int err;
   // int retries = 0;
   
@@ -531,65 +617,6 @@ int l86xxx_register(FAR const char *devpath, FAR const char *uartpath, int devno
     {
       snwarn("Couldn't set baud rate of device: %d\n", err);
     }
-  
-  nxsig_usleep(20000);
-  file_ioctl(&priv->uart, TCGETS, &opt);
-  cfmakeraw(&opt);
-  switch(L86_XXX_BAUD_RATE){
-    case 4800:
-    {
-      cfsetispeed(&opt, 4800);
-      cfsetospeed(&opt, 4800);
-      break;
-    }
-    case 9600:
-    {
-      cfsetispeed(&opt, 9600);
-      cfsetospeed(&opt, 9600);
-      break;
-    }
-    case 14400:
-    {
-      cfsetispeed(&opt, 14400);
-      cfsetospeed(&opt, 14400);
-      break;
-    }
-    case 19200:
-    {
-      cfsetispeed(&opt, 19200);
-      cfsetospeed(&opt, 19200);
-      break;
-    }
-    case 38400:
-    {
-      cfsetispeed(&opt, 38400);
-      cfsetospeed(&opt, 38400);
-      break;
-    }
-    case 57600:
-    {
-      cfsetispeed(&opt, 57600);
-      cfsetospeed(&opt, 57600);
-      break;
-    }
-    case 115200:
-    {
-      cfsetispeed(&opt, 115200);
-      cfsetospeed(&opt, 115200);
-      break;
-    }
-  }
-
-  err = file_ioctl(&priv->uart, TCSETS, &opt);
-  if (err < 0)
-    {
-      snwarn("Couldn't change baud rate of U(S)ART interface: %d\n", err); 
-    }
-
-  // Wait for module to update
-  for (int i = 0; i < 5; ++i){
-    read_line(priv);
-  }
 
   err = send_command(priv, SET_POS_FIX, L86_XXX_FIX_INT);
   if (err != 3)
