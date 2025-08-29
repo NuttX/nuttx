@@ -25,6 +25,7 @@ on:
       - 'CONTRIBUTING.md'
       - 'Documentation/**'
     branches:
+      - master
       - 'releases/*'
     tags:
 
@@ -122,7 +123,7 @@ jobs:
 
   # Select the Linux Builds based on PR Arch Label
   Linux-Arch:
-    uses: apache/nuttx/.github/workflows/arch.yml@master
+    uses: NuttX/nuttx/.github/workflows/arch.yml@master
     needs: Fetch-Source
     with:
       os: Linux
@@ -146,7 +147,7 @@ jobs:
       DOCKER_BUILDKIT: 1
 
     strategy:
-      max-parallel: 12
+      fail-fast: false
       matrix:
         boards: ${{ fromJSON(needs.Linux-Arch.outputs.selected_builds) }}
 
@@ -201,7 +202,7 @@ jobs:
 
   # Select the macOS Builds based on PR Arch Label
   macOS-Arch:
-    uses: apache/nuttx/.github/workflows/arch.yml@master
+    uses: NuttX/nuttx/.github/workflows/arch.yml@master
     needs: Fetch-Source
     with:
       os: macOS
@@ -216,7 +217,7 @@ jobs:
     needs: macOS-Arch
     if: ${{ needs.macOS-Arch.outputs.skip_all_builds != '1' }}
     strategy:
-      max-parallel: 2
+      fail-fast: false
       matrix:
         boards: ${{ fromJSON(needs.macOS-Arch.outputs.selected_builds) }}
     steps:
@@ -261,7 +262,7 @@ jobs:
 
   # Select the msys2 Builds based on PR Arch Label
   msys2-Arch:
-    uses: apache/nuttx/.github/workflows/arch.yml@master
+    uses: NuttX/nuttx/.github/workflows/arch.yml@master
     needs: Fetch-Source
     with:
       os: msys2
@@ -288,7 +289,7 @@ jobs:
         with:
           msystem: MSYS
           update: false
-          cache: false
+          
           install: >-
             base-devel
             gcc
@@ -343,7 +344,7 @@ jobs:
 
   # Select the msvc Builds based on PR Arch Label
   msvc-Arch:
-    uses: apache/nuttx/.github/workflows/arch.yml@master
+    uses: NuttX/nuttx/.github/workflows/arch.yml@master
     needs: Fetch-Source
     with:
       os: msvc
