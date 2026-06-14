@@ -108,7 +108,7 @@ jobs:
         run: |
 
           # Skip all macOS Builds
-          if [[ "${{ inputs.os }}" == "macOS" ]]; then
+          if [[ "${{ inputs.os }}" == "NOTUSED" ]]; then
             echo "Skipping all macOS Builds"
             echo "skip_all_builds=1" | tee -a $GITHUB_OUTPUT
             exit
